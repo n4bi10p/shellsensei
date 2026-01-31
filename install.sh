@@ -83,21 +83,31 @@ pip install --quiet -r requirements.txt
 echo ""
 echo -e "${BLUE}[4/5]${NC} Configuring Gemini API..."
 if [ ! -f ".env" ]; then
-    echo ""
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}Get your FREE Gemini API key:${NC}"
-    echo -e "  ${BLUE}https://aistudio.google.com/apikey${NC}"
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    read -p "$(echo -e ${GREEN}Enter your Gemini API key:${NC} )" API_KEY
-    
-    if [ -z "$API_KEY" ]; then
-        echo -e "${RED}✗ API key cannot be empty${NC}"
-        exit 1
+    # Check if API key is provided as environment variable
+    if [ -n "$GEMINI_API_KEY" ]; then
+        echo "GEMINI_API_KEY=$GEMINI_API_KEY" > .env
+        echo -e "${GREEN}✓${NC} API key configured from environment"
+    else
+        echo ""
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${GREEN}Get your FREE Gemini API key:${NC}"
+        echo -e "  ${BLUE}https://aistudio.google.com/apikey${NC}"
+        echo -e ""
+        echo -e "${YELLOW}Tip: Set GEMINI_API_KEY env var for non-interactive install${NC}"
+        echo -e "  ${BLUE}export GEMINI_API_KEY=your_key_here${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        read -p "$(echo -e ${GREEN}Enter your Gemini API key:${NC} )" API_KEY
+        
+        if [ -z "$API_KEY" ]; then
+            echo -e "${RED}✗ API key cannot be empty${NC}"
+            echo -e "${YELLOW}Run installer again with: export GEMINI_API_KEY=your_key${NC}"
+            exit 1
+        fi
+        
+        echo "GEMINI_API_KEY=$API_KEY" > .env
+        echo -e "${GREEN}✓${NC} API key saved"
     fi
-    
-    echo "GEMINI_API_KEY=$API_KEY" > .env
-    echo -e "${GREEN}✓${NC} API key saved"
 else
     echo -e "${GREEN}✓${NC} API key already configured"
 fi

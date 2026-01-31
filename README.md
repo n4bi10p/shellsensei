@@ -5,9 +5,19 @@
 
 ## 🚀 Quick Install (One-Line)
 
+### Option 1: Seamless Install (with API key)
+```bash
+export GEMINI_API_KEY="your_key_here"
+curl -sSL https://raw.githubusercontent.com/n4bi10p/shellsensei/main/install.sh | bash
+```
+
+### Option 2: Interactive Install
 ```bash
 curl -sSL https://raw.githubusercontent.com/n4bi10p/shellsensei/main/install.sh | bash
 ```
+*You'll be prompted for your API key*
+
+**Get your FREE Gemini API key:** https://aistudio.google.com/apikey
 
 Then run:
 ```bash
