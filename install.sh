@@ -51,15 +51,19 @@ REPO_URL="https://github.com/n4bi10p/shellsensei"
 # Clone or update repository
 echo ""
 echo -e "${BLUE}[1/5]${NC} Installing ShellSensei..."
-if [ -d "$INSTALL_DIR" ]; then
+if [ -d "$INSTALL_DIR/.git" ]; then
     echo -e "${YELLOW}  ShellSensei already exists. Updating...${NC}"
     cd "$INSTALL_DIR"
     git pull origin main 2>/dev/null || echo -e "${YELLOW}  (Could not update, using existing version)${NC}"
+elif [ -d "$INSTALL_DIR" ]; then
+    echo -e "${YELLOW}  Removing incomplete installation...${NC}"
+    rm -rf "$INSTALL_DIR"
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
 else
     git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
 fi
-
-cd "$INSTALL_DIR"
 
 # Create virtual environment
 echo ""
