@@ -72,7 +72,8 @@ Footer {
 
 #main-area {
     height: 1fr;
-    padding: 1 2;
+    padding: 1;
+    min-height: 20;
 }
 
 #log {
@@ -173,34 +174,32 @@ class ShellSenseiApp(App):
             f"📁 {os.getcwd()}"
         )
 
-        # 4. Welcome message with ASCII logo
-        ascii_logo = """
-[bold #ff4444] ____  _          _ _ ____                      _ 
-/ ___|| |__   ___| | / ___|  ___ _ __  ___  ___(_)
-\___ \\| '_ \\ / _ \\ | |\___ \\ / _ \\ '_ \\/ __|/ _ \\ |
- ___) | | | |  __/ | |___) |  __/ | | \\__ \\  __/ |
-|____/|_| |_|\___|_|_|____/ \___|_| |_|___/\___|_|[/]
-        """
+        # 4. Welcome message with compact ASCII logo
         self._log("", "dim")
-        self._log(ascii_logo, "")
+        self._log("[bold #ff4444]   _____ _          _ _ _____                     _[/]", "white")
+        self._log("[bold #ff5555]  / ____| |        | | /  ____|                   (_)[/]", "white")
+        self._log("[bold #ff6666] | (___ | |__   ___| | | (___   ___ _ __  ___  ___ _[/]", "white")
+        self._log("[bold #ff7777]  \\___ \\| '_ \\ / _ \\ | |\\___ \\ / _ \\ '_ \\/ __|/ _ \\ |[/]", "white")
+        self._log("[bold #ff8888]  ____) | | | |  __/ | |____) |  __/ | | \\__ \\  __/ |[/]", "white")
+        self._log("[bold #ff9999] |_____/|_| |_|\\___|_|_|_____/ \\___|_| |_|___/\\___|_|[/]", "white")
         self._log("", "dim")
-        self._log("[bold #ff6666]━" * 72 + "[/]", "")
+        self._log("[bold #ff6666]" + "━" * 60 + "[/]", "white")
         self._log("", "dim")
         self._log(
             f"[#58a6ff]•[/] System detected: [bold]{p.get('distro','Linux')}[/bold] with [bold]{p.get('package_manager','unknown')}[/bold]",
-            "",
+            "white",
         )
         self._log(
             f"[#58a6ff]•[/] Every command suggestion is [bold #7ee787]tailored to your setup[/]",
-            "",
+            "white",
         )
         self._log("", "dim")
-        self._log("[bold #ffa07a]Quick Start:[/]", "")
-        self._log("  [#7ee787]→[/] Type questions in plain English: [dim]\"install docker\"[/]", "")
-        self._log("  [#7ee787]→[/] Type [bold cyan]help[/] for all commands", "")
-        self._log("  [#7ee787]→[/] Type [bold cyan]profile[/] to see your full system scan", "")
+        self._log("[bold #ffa07a]Quick Start:[/]", "white")
+        self._log("  [#7ee787]→[/] Type questions in plain English: [dim]\"install docker\"[/]", "white")
+        self._log("  [#7ee787]→[/] Type [bold cyan]help[/] for all commands", "white")
+        self._log("  [#7ee787]→[/] Type [bold cyan]profile[/] to see your full system scan", "white")
         self._log("", "dim")
-        self._log("[bold #ff6666]━" * 72 + "[/]", "")
+        self._log("[bold #ff6666]" + "━" * 72 + "[/]", "white")
         self._separator()
 
         # 5. Auto-focus input field and force styling
@@ -219,7 +218,7 @@ class ShellSenseiApp(App):
 
     def _separator(self) -> None:
         self.query_one("#log", RichLog).write(
-            Text("─" * 72, style="dim")
+            Text("─" * 60, style="dim")
         )
 
     # ---------------------------------------------------------------------------
@@ -232,16 +231,16 @@ class ShellSenseiApp(App):
             return
         
         self._log("", "dim")
-        self._log("💡 [bold #ffa07a]Suggested next steps:[/]", "")
+        self._log("💡 [bold #ffa07a]Suggested next steps:[/]", "white")
         for i, step in enumerate(steps[:3], 1):
             cmd = step.get("cmd", "")
             why = step.get("why", "")
-            self._log(f"  [bold #7ee787][{i}][/] [cyan]{cmd}[/]", "")
-            self._log(f"      [dim]{why}[/]", "")
+            self._log(f"  [bold #7ee787][{i}][/] [cyan]{cmd}[/]", "white")
+            self._log(f"      [dim]{why}[/]", "white")
         
         if len(steps) > 0:
             self._log("", "dim")
-            self._log("[dim]Type 1, 2, or 3 to run a suggestion[/]", "")
+            self._log("[dim]Type 1, 2, or 3 to run a suggestion[/]", "white")
 
     # ---------------------------------------------------------------------------
     # Input handler — the main event loop
