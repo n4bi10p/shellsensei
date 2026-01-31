@@ -3,6 +3,17 @@
 > **A system-aware AI terminal assistant for Linux beginners.**  
 > Powered by Google Gemini — gives commands that actually work on YOUR system.
 
+## 🚀 Quick Install (One-Line)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/n4bi10p/shellsensei/main/install.sh | bash
+```
+
+Then run:
+```bash
+shellsensei
+```
+
 ---
 
 ## The Problem
