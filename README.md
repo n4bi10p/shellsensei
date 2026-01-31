@@ -38,8 +38,8 @@ Zero hallucination. Maximum accuracy.
 ## Install
 
 ```bash
-git clone https://github.com/n4bi10p/ShellSensei.git
-cd ShellSensei
+git clone https://github.com/n4bi10p/shellsensei.git
+cd shellsensei
 pip install -r requirements.txt
 ```
 
