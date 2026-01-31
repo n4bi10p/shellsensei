@@ -275,17 +275,19 @@ class ShellSenseiApp(App):
             return
 
         # --- Confirmation flow (y/n for pending command) ---
-        if raw.lower() == "y" and self._pending_cmd:
+        if (raw.lower() == "y" or raw.lower() == "yes") and self._pending_cmd:
             cmd = self._pending_cmd
             self._pending_cmd = ""
             self._reset_placeholder()
+            self._separator()
             await self._run_command(cmd)
             return
 
-        if raw.lower() == "n" and self._pending_cmd:
+        if (raw.lower() == "n" or raw.lower() == "no") and self._pending_cmd:
             self._pending_cmd = ""
             self._reset_placeholder()
-            self._log("Cancelled.", "dim")
+            self._separator()
+            self._log("❌ Command cancelled.", "#f85149")
             return
 
         # --- Pick a suggestion by number ---
@@ -339,6 +341,10 @@ class ShellSenseiApp(App):
         # Show suggestions
         self._show_suggestions(response.get("next_steps", []))
 
+        # --- Ask for permission before running ANY command ---
+        self._log("", "dim")
+        self._log("[bold #ffa07a]Run this command?[/] Type [bold green]y[/] (yes) or [bold red]n[/] (no)", "white")
+
         # Check if this looks like an explanation request (command without args that needs stdin)
         cmd = response["command"].strip()
         stdin_cmds = ["cat", "grep", "sed", "awk", "sort", "uniq", "wc"]
@@ -348,7 +354,7 @@ class ShellSenseiApp(App):
             self._log("   Type '1' to run the first suggestion, or ask me to run a specific example.", "dim")
             return
 
-        # --- Safety gate ---
+        # --- Safety check (still block dangerous commands) ---
         safety, warning = check_safety(response["command"])
 
         if safety == "dangerous":
@@ -356,16 +362,9 @@ class ShellSenseiApp(App):
             self._log("⛔  BLOCKED  —  This command is too dangerous to run.", "red bold")
             return
 
-        if safety == "caution":
-            # Need confirmation
-            self._pending_cmd = response["command"]
-            self.query_one("#user-input", Input).placeholder = "⚠️  Type 'y' to confirm or 'n' to cancel"
-            self._log("", "dim")
-            self._log("⚠️   This command needs confirmation. Type y or n.", "#e3b341")
-            return
-
-        # Safe — run immediately
-        await self._run_command(response["command"])
+        # --- Always require confirmation (no auto-execution) ---
+        self._pending_cmd = response["command"]
+        self.query_one("#user-input", Input).placeholder = "Type 'y' to run or 'n' to cancel"
 
     # ---------------------------------------------------------------------------
     # Command execution
