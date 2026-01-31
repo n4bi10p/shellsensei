@@ -72,7 +72,7 @@ Footer {
 
 #main-area {
     height: 1fr;
-    padding: 1;
+    padding: 0 1;
     min-height: 20;
 }
 
@@ -81,6 +81,8 @@ Footer {
     border: round #ff4444;
     background: #0d1117;
     padding: 1;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 #suggestions-bar {
@@ -89,7 +91,7 @@ Footer {
 
 #input-row {
     height: 3;
-    margin-top: 2;
+    margin-top: 1;
     padding: 0 1;
 }
 
@@ -138,7 +140,7 @@ class ShellSenseiApp(App):
         yield Static("🔥 ShellSensei — System-Aware AI Terminal Assistant", id="title-bar")
         yield Static(id="sysbar")
         with Vertical(id="main-area"):
-            yield RichLog(id="log", highlight=True, markup=True)
+            yield RichLog(id="log", highlight=True, markup=True, wrap=True, max_lines=1000)
             yield Static(id="suggestions-bar")
             with Vertical(id="input-row"):
                 yield Input(
@@ -176,12 +178,12 @@ class ShellSenseiApp(App):
 
         # 4. Welcome message with compact ASCII logo
         self._log("", "dim")
-        self._log("[bold #ff4444]   _____ _          _ _ _____                     _[/]", "white")
-        self._log("[bold #ff5555]  / ____| |        | | /  ____|                   (_)[/]", "white")
-        self._log("[bold #ff6666] | (___ | |__   ___| | | (___   ___ _ __  ___  ___ _[/]", "white")
-        self._log("[bold #ff7777]  \\___ \\| '_ \\ / _ \\ | |\\___ \\ / _ \\ '_ \\/ __|/ _ \\ |[/]", "white")
-        self._log("[bold #ff8888]  ____) | | | |  __/ | |____) |  __/ | | \\__ \\  __/ |[/]", "white")
-        self._log("[bold #ff9999] |_____/|_| |_|\\___|_|_|_____/ \\___|_| |_|___/\\___|_|[/]", "white")
+        self._log("[bold #ff4444]   ███████╗██╗  ██╗███████╗██╗     ██╗     ███████╗███████╗███╗   ██╗███████╗███████╗██╗[/]", "white")
+        self._log("[bold #ff5555]   ██╔════╝██║  ██║██╔════╝██║     ██║     ██╔════╝██╔════╝████╗  ██║██╔════╝██╔════╝██║[/]", "white")
+        self._log("[bold #ff6666]   ███████╗███████║█████╗  ██║     ██║     ███████╗█████╗  ██╔██╗ ██║███████╗█████╗  ██║[/]", "white")
+        self._log("[bold #ff8888]   ╚════██║██╔══██║██╔══╝  ██║     ██║     ╚════██║██╔══╝  ██║╚██╗██║╚════██║██╔══╝  ██║[/]", "white")
+        self._log("[bold #ffaaaa]   ███████║██║  ██║███████╗███████╗███████╗███████║███████╗██║ ╚████║███████║███████╗██║[/]", "white")
+        self._log("[bold #ffcccc]   ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝╚══════╝╚═╝[/]", "white")
         self._log("", "dim")
         self._log("[bold #ff6666]" + "━" * 60 + "[/]", "white")
         self._log("", "dim")
@@ -212,9 +214,12 @@ class ShellSenseiApp(App):
     # Logging helpers
     # ---------------------------------------------------------------------------
     def _log(self, msg: str, style: str = "white") -> None:
-        self.query_one("#log", RichLog).write(
+        log_widget = self.query_one("#log", RichLog)
+        log_widget.write(
             Text.from_markup(f"[{style}]{msg}[/]")
         )
+        # Auto-scroll to bottom to show latest content
+        log_widget.scroll_end(animate=False)
 
     def _separator(self) -> None:
         self.query_one("#log", RichLog).write(
