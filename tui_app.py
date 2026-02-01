@@ -12,6 +12,7 @@ This is the entry point. It builds the full Textual TUI and wires together:
 
 import os
 import sys
+import json
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -28,7 +29,7 @@ from system_profiler import (
     load_profile_json,
     PROFILE_MD,
 )
-from ai_core import get_ai_response, get_error_fix
+from ai_core import get_ai_response, get_ai_response_async, get_error_fix
 from executor import execute, check_safety, read_shell_history
 from learning import track_command, get_progress_lines
 
@@ -169,6 +170,8 @@ class ShellSenseiApp(App):
     last_error:   dict = {}       # {"cmd": ..., "error": ...} or empty
     suggestions:  list = []       # current next_steps list
     _pending_cmd: str  = ""       # command waiting for y/n confirmation
+    _pending_alias: str = ""      # alias waiting for confirmation
+    aliases:      dict = {}       # user-defined command aliases
 
     # ---------------------------------------------------------------------------
     # Layout
@@ -200,10 +203,13 @@ class ShellSenseiApp(App):
         self.profile_md   = load_profile_md()
         self.profile_data = load_profile_json()
 
-        # 2. Read shell history for context
+        # 2. Load aliases
+        self._load_aliases()
+
+        # 3. Read shell history for context
         self.history = read_shell_history(30)
 
-        # 3. Populate system info bar
+        # 4. Populate system info bar
         p = self.profile_data
         self.query_one("#sysbar", Static).update(
             f"🖥️  {p.get('distro','?')}  │  "
@@ -301,6 +307,36 @@ class ShellSenseiApp(App):
         if not raw:
             return
 
+        # --- Alias confirmation flow (y/n for pending alias) ---
+        if (raw.lower() == "y" or raw.lower() == "yes") and self._pending_alias:
+            expanded = self.aliases[self._pending_alias]
+            self._separator()
+            self._log(f"🔖  Alias expanded: /{self._pending_alias} → {expanded}", "#7ee787")
+            self._pending_alias = ""
+            raw = expanded
+            # Continue processing the expanded command
+        elif (raw.lower() == "n" or raw.lower() == "no") and self._pending_alias:
+            self._log("❌ Alias cancelled", "yellow")
+            self._pending_alias = ""
+            return
+
+        # --- Check for alias invocation (e.g., /update) ---
+        if raw.startswith("/"):
+            alias_name = raw[1:]
+            if alias_name in self.aliases:
+                # Show alias and ask for confirmation
+                expanded = self.aliases[alias_name]
+                self._separator()
+                self._log(f"🔖  Alias: /{alias_name}", "#7ee787")
+                self._log(f"   Will execute: {expanded}", "#c9d1d9")
+                self._log("\n🔒 Confirm execution? (y/n)", "#ffa07a")
+                self._pending_alias = alias_name
+                return
+            else:
+                self._log(f"❌ Unknown alias: /{alias_name}", "red")
+                self._log(f"💡 Available aliases: {', '.join('/' + k for k in self.aliases.keys()) or 'none'}", "dim")
+                return
+
         # --- Special commands ---
         if raw.lower() in ("exit", "quit", "q"):
             self.exit()
@@ -361,9 +397,9 @@ class ShellSenseiApp(App):
 
         context = self._build_context()
 
-        # Call Gemini - just call it directly since Textual handles async
+        # Call Gemini async - TUI stays responsive
         try:
-            response = get_ai_response(raw, self.profile_md, context)
+            response = await get_ai_response_async(raw, self.profile_md, context)
         except Exception as e:
             self._log(f"❌ Error: {str(e)}", "red")
             return
@@ -513,6 +549,7 @@ class ShellSenseiApp(App):
         self._log("  Special commands:", "#8b949e")
         self._log("      run <cmd>     →  Run any shell command directly", "#8b949e")
         self._log("      1 / 2 / 3     →  Pick a suggestion from the list", "#8b949e")
+        self._log("      /<alias>      →  Use saved alias (e.g., /update, /ports)", "#8b949e")
         self._log("      profile       →  Show your system profile", "#8b949e")
         self._log("      progress      →  Show learning progress & achievements", "#8b949e")
         self._log("      help          →  Show this help", "#8b949e")
@@ -578,6 +615,61 @@ class ShellSenseiApp(App):
     def _reset_placeholder(self) -> None:
         # TextArea doesn't use placeholders - info shown in footer
         pass
+    
+    def _load_aliases(self) -> None:
+        """Load user-defined command aliases from JSON file with security validation."""
+        from system_profiler import PROFILE_DIR
+        import re
+        aliases_file = PROFILE_DIR / "aliases.json"
+        
+        # Dangerous patterns to block
+        dangerous_patterns = [
+            r'curl\s+http',  # remote code execution
+            r'wget\s+http',  # remote code execution
+            r'\$\(',         # command substitution
+            r'`',            # backtick substitution
+            r';\s*rm\s+-rf', # destructive commands
+            r'\|\s*sh',      # piped shell execution
+            r'\|\s*bash',    # piped bash execution
+        ]
+        
+        def is_safe_alias(command: str) -> bool:
+            """Check if alias command contains dangerous patterns."""
+            for pattern in dangerous_patterns:
+                if re.search(pattern, command, re.IGNORECASE):
+                    return False
+            return True
+        
+        # Create default aliases if file doesn't exist
+        if not aliases_file.exists():
+            default_aliases = {
+                "update": "sudo apt update && sudo apt upgrade -y",
+                "ports": "sudo netstat -tulpn",
+                "myip": "curl -s ifconfig.me",
+                "clean": "sudo apt autoremove -y && sudo apt clean",
+            }
+            try:
+                with open(aliases_file, 'w') as f:
+                    json.dump(default_aliases, f, indent=2)
+                self.aliases = default_aliases
+            except Exception:
+                self.aliases = {}
+        else:
+            # Load existing aliases and validate them
+            try:
+                with open(aliases_file, 'r') as f:
+                    loaded_aliases = json.load(f)
+                # Filter out dangerous aliases
+                self.aliases = {
+                    name: cmd for name, cmd in loaded_aliases.items()
+                    if is_safe_alias(cmd)
+                }
+                # Warn if any were filtered
+                if len(self.aliases) < len(loaded_aliases):
+                    filtered = len(loaded_aliases) - len(self.aliases)
+                    self.log.write(f"⚠️  Filtered {filtered} potentially dangerous alias(es)")
+            except Exception:
+                self.aliases = {}
 
 
 # ---------------------------------------------------------------------------

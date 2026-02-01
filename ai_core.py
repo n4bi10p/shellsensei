@@ -8,6 +8,12 @@ import os
 import re
 import json
 import warnings
+import hashlib
+import pickle
+import time
+import asyncio
+import hmac
+from pathlib import Path
 
 # Suppress the deprecation warning for google.generativeai
 warnings.filterwarnings('ignore', message='.*google.generativeai.*')
@@ -22,6 +28,14 @@ API_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=API_KEY)
 
 MODEL_NAME = "gemini-2.5-flash"
+
+# --- Cache Setup ---
+CACHE_DIR = Path.home() / ".shellsensei" / "cache"
+CACHE_DIR.mkdir(exist_ok=True, parents=True)
+CACHE_TTL = 86400  # 24 hours
+
+# Security: Per-session HMAC secret for cache integrity
+CACHE_SECRET = os.urandom(32)
 
 SYSTEM_PROMPT = """You are ShellSensei — a system-aware AI terminal assistant for Linux beginners.
 
@@ -64,6 +78,70 @@ RESPONSE FORMAT — return ONLY valid JSON, nothing else:
 """
 
 
+def _get_cache_key(query: str, profile: str) -> str:
+    """Generate cache key from query + profile hash."""
+    content = f"{query}|{profile}"
+    return hashlib.md5(content.encode()).hexdigest()
+
+
+def _sign_cache(data: bytes) -> bytes:
+    """Sign cache data with HMAC for integrity verification."""
+    signature = hmac.new(CACHE_SECRET, data, hashlib.sha256).digest()
+    return signature + data
+
+
+def _verify_cache(signed_data: bytes) -> bytes | None:
+    """Verify HMAC signature and return original data if valid."""
+    if len(signed_data) < 32:
+        return None
+    signature = signed_data[:32]
+    data = signed_data[32:]
+    expected_signature = hmac.new(CACHE_SECRET, data, hashlib.sha256).digest()
+    if hmac.compare_digest(signature, expected_signature):
+        return data
+    return None
+
+
+def _get_cached_response(query: str, profile: str) -> dict | None:
+    """Check if response is cached (24h TTL) and verify integrity."""
+    cache_file = CACHE_DIR / f"{_get_cache_key(query, profile)}.pkl"
+    if cache_file.exists():
+        age = time.time() - cache_file.stat().st_mtime
+        if age < CACHE_TTL:
+            try:
+                with open(cache_file, 'rb') as f:
+                    signed_data = f.read()
+                # Verify HMAC signature
+                data = _verify_cache(signed_data)
+                if data is None:
+                    # Corrupted or tampered cache - delete it
+                    cache_file.unlink()
+                    return None
+                return pickle.loads(data)
+            except Exception:
+                # Corrupted cache, delete it
+                cache_file.unlink()
+    return None
+
+
+def _cache_response(query: str, profile: str, response: dict) -> None:
+    """Save response to cache with HMAC signature and secure permissions."""
+    try:
+        cache_file = CACHE_DIR / f"{_get_cache_key(query, profile)}.pkl"
+        # Pickle the data
+        data = pickle.dumps(response)
+        # Sign it with HMAC
+        signed_data = _sign_cache(data)
+        # Write to file
+        with open(cache_file, 'wb') as f:
+            f.write(signed_data)
+        # Set restrictive permissions (0600)
+        cache_file.chmod(0o600)
+    except Exception:
+        # Silently fail if caching doesn't work
+        pass
+
+
 def _parse_json(text: str) -> dict:
     """Safely parse JSON from Gemini response, stripping markdown if present."""
     text = text.strip()
@@ -86,6 +164,11 @@ def get_ai_response(user_query: str, system_profile_md: str, context: dict) -> d
     Returns:
         Parsed dict with command, explanation, safety, next_steps
     """
+    # Check cache first
+    cached = _get_cached_response(user_query, system_profile_md)
+    if cached:
+        return cached
+    
     prompt = f"""=== USER'S SYSTEM PROFILE ===
 {system_profile_md}
 
@@ -110,7 +193,12 @@ Last Error (if any): {context.get('last_error', 'None')}
             },
         )
         response = model.generate_content(prompt)
-        return _parse_json(response.text)
+        parsed = _parse_json(response.text)
+        
+        # Cache the response
+        _cache_response(user_query, system_profile_md, parsed)
+        
+        return parsed
 
     except json.JSONDecodeError:
         # If JSON parsing fails, return the raw text as explanation
@@ -129,6 +217,18 @@ Last Error (if any): {context.get('last_error', 'None')}
             "warning": "",
             "next_steps": [],
         }
+
+
+async def get_ai_response_async(user_query: str, system_profile_md: str, context: dict) -> dict:
+    """Async wrapper for AI response - doesn't block TUI."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        get_ai_response,
+        user_query,
+        system_profile_md,
+        context
+    )
 
 
 def get_error_fix(error_output: str, failed_command: str, system_profile_md: str) -> dict:
