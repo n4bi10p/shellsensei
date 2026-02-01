@@ -129,7 +129,7 @@ Tracks what you learned
 | Tool | Role |
 |---|---|
 | Python 3.11+ | Core language |
-| Google Gemini API | AI brain (gemini-2.0-flash) |
+| Google Gemini API | AI brain (gemini-2.5-flash) |
 | Textual | Terminal UI framework |
 | Rich | Terminal formatting |
 | psutil | System metrics |
