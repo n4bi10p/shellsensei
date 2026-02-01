@@ -15,17 +15,15 @@ import asyncio
 import hmac
 from pathlib import Path
 
-# Suppress the deprecation warning for google.generativeai
-warnings.filterwarnings('ignore', message='.*google.generativeai.*')
-
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # --- Setup ---
 API_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=API_KEY)
+client = genai.Client(api_key=API_KEY)
 
 MODEL_NAME = "gemini-2.5-flash"
 
@@ -183,16 +181,16 @@ Last Error (if any): {context.get('last_error', 'None')}
 """
 
     try:
-        model = genai.GenerativeModel(
-            MODEL_NAME,
-            system_instruction=SYSTEM_PROMPT,
-            generation_config={
-                "temperature": 0.3,
-                "max_output_tokens": 1024,
-                "response_mime_type": "application/json",
-            },
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.3,
+                max_output_tokens=1024,
+                response_mime_type="application/json",
+            ),
         )
-        response = model.generate_content(prompt)
         parsed = _parse_json(response.text)
         
         # Cache the response
@@ -257,16 +255,16 @@ Diagnose and fix this error for this specific system.
 """
 
     try:
-        model = genai.GenerativeModel(
-            MODEL_NAME,
-            system_instruction=ERROR_FIX_PROMPT,
-            generation_config={
-                "temperature": 0.2,
-                "max_output_tokens": 512,
-                "response_mime_type": "application/json",
-            },
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=ERROR_FIX_PROMPT,
+                temperature=0.2,
+                max_output_tokens=512,
+                response_mime_type="application/json",
+            ),
         )
-        response = model.generate_content(prompt)
         return _parse_json(response.text)
 
     except json.JSONDecodeError:
