@@ -15,9 +15,10 @@ import sys
 from pathlib import Path
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Input, RichLog, Static
+from textual.widgets import Header, Footer, Input, TextArea, RichLog, Static
 from textual.containers import Vertical
 from textual.reactive import reactive
+from textual.message import Message
 from rich.text import Text
 
 from system_profiler import (
@@ -30,6 +31,34 @@ from system_profiler import (
 from ai_core import get_ai_response, get_error_fix
 from executor import execute, check_safety, read_shell_history
 from learning import track_command, get_progress_lines
+
+
+# ---------------------------------------------------------------------------
+# Custom TextArea that submits on Enter
+# ---------------------------------------------------------------------------
+class SubmitTextArea(TextArea):
+    """TextArea that submits on Enter, new line on Ctrl+J."""
+    
+    class Submitted(Message):
+        """Message sent when Enter is pressed."""
+        def __init__(self, text: str) -> None:
+            self.text = text
+            super().__init__()
+    
+    def on_key(self, event) -> None:
+        """Handle key events: Enter submits, Ctrl+J creates new line."""
+        if event.key == "enter":
+            # Enter = Submit query
+            self.post_message(self.Submitted(self.text))
+            self.load_text("")
+            event.prevent_default()
+            event.stop()
+        elif event.key == "ctrl+j":
+            # Ctrl+J = Insert new line (Line Feed)
+            self.insert("\n")
+            event.prevent_default()
+            event.stop()
+        # All other keys handled by TextArea normally
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +119,7 @@ Footer {
 }
 
 #input-row {
-    height: 3;
+    height: 8;
     margin-top: 1;
     padding: 0 1;
 }
@@ -99,7 +128,7 @@ Footer {
     border: heavy #ff4444;
     background: #000000;
     color: #00ff00;
-    height: 3;
+    height: 8;
     padding: 0 1;
 }
 
@@ -107,6 +136,15 @@ Footer {
     border: heavy #ff6666;
     background: #000000;
     color: #00ff00;
+}
+
+TextArea {
+    background: #000000;
+    color: #00ff00;
+}
+
+TextArea:focus {
+    border: heavy #ff6666;
 }
 """
 
@@ -143,8 +181,7 @@ class ShellSenseiApp(App):
             yield RichLog(id="log", highlight=True, markup=True, wrap=True, max_lines=1000)
             yield Static(id="suggestions-bar")
             with Vertical(id="input-row"):
-                yield Input(
-                    placeholder="Type your question here...",
+                yield SubmitTextArea(
                     id="user-input",
                 )
         yield Footer()
@@ -198,6 +235,7 @@ class ShellSenseiApp(App):
         self._log("", "dim")
         self._log("[bold #ffa07a]Quick Start:[/]", "white")
         self._log("  [#7ee787]→[/] Type questions in plain English: [dim]\"install docker\"[/]", "white")
+        self._log("  [#7ee787]→[/] Press [bold cyan]Enter[/] to submit (Ctrl+J for new line)", "white")
         self._log("  [#7ee787]→[/] Type [bold cyan]help[/] for all commands", "white")
         self._log("  [#7ee787]→[/] Type [bold cyan]profile[/] to see your full system scan", "white")
         self._log("", "dim")
@@ -205,7 +243,8 @@ class ShellSenseiApp(App):
         self._separator()
 
         # 5. Auto-focus input field and force styling
-        input_widget = self.query_one("#user-input", Input)
+        input_widget = self.query_one("#user-input", SubmitTextArea)
+        input_widget.load_text("")
         input_widget.focus()
         # Force refresh to apply styles
         input_widget.refresh()
@@ -250,9 +289,14 @@ class ShellSenseiApp(App):
     # ---------------------------------------------------------------------------
     # Input handler — the main event loop
     # ---------------------------------------------------------------------------
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
-        raw = event.value.strip()
-        event.control.clear()
+    def on_submit_text_area_submitted(self, event: SubmitTextArea.Submitted) -> None:
+        """Handle submission from custom TextArea."""
+        raw = event.text.strip()
+        if raw:
+            self.call_later(self._handle_input, raw)
+    
+    async def _handle_input(self, raw: str) -> None:
+        """Process user input."""
 
         if not raw:
             return
@@ -341,6 +385,14 @@ class ShellSenseiApp(App):
         # Show suggestions
         self._show_suggestions(response.get("next_steps", []))
 
+        # Check if command is interactive
+        from executor import is_interactive_command
+        if is_interactive_command(response['command']):
+            self._log("", "dim")
+            self._log("💡  This is an [bold yellow]interactive program[/] that needs a real terminal.", "#e3b341")
+            self._log("   Open a new terminal and run it there, or type [bold cyan]'run <command>'[/] to try anyway.", "dim")
+            return
+
         # --- Ask for permission before running ANY command ---
         self._log("", "dim")
         self._log("[bold #ffa07a]Run this command?[/] Type [bold green]y[/] (yes) or [bold red]n[/] (no)", "white")
@@ -364,7 +416,7 @@ class ShellSenseiApp(App):
 
         # --- Always require confirmation (no auto-execution) ---
         self._pending_cmd = response["command"]
-        self.query_one("#user-input", Input).placeholder = "Type 'y' to run or 'n' to cancel"
+        # TextArea doesn't have placeholder, so we'll show instruction in log
 
     # ---------------------------------------------------------------------------
     # Command execution
@@ -524,9 +576,8 @@ class ShellSenseiApp(App):
     # Helpers
     # ---------------------------------------------------------------------------
     def _reset_placeholder(self) -> None:
-        self.query_one("#user-input", Input).placeholder = (
-            "Ask me anything… e.g. 'list files', 'install docker'"
-        )
+        # TextArea doesn't use placeholders - info shown in footer
+        pass
 
 
 # ---------------------------------------------------------------------------

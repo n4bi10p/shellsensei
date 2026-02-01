@@ -44,6 +44,19 @@ CAUTION_PATTERNS = [
     (r"\bdd\b",               "dd can be dangerous if used incorrectly."),
 ]
 
+# Interactive commands that need special handling (don't run in subprocess)
+INTERACTIVE_COMMANDS = [
+    'htop', 'top', 'btop', 'vim', 'nano', 'emacs', 'vi',
+    'less', 'more', 'man', 'tmux', 'screen', 'ssh',
+    'python3', 'python', 'node', 'ipython', 'mysql', 'psql'
+]
+
+
+def is_interactive_command(command: str) -> bool:
+    """Check if command is interactive and shouldn't be run in subprocess."""
+    cmd_base = command.strip().split()[0] if command.strip() else ""
+    return cmd_base in INTERACTIVE_COMMANDS
+
 
 def check_safety(command: str) -> tuple:
     """

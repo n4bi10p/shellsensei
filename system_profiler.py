@@ -59,6 +59,38 @@ def _get_package_count(pkg_manager: str) -> int:
     except:
         return 0
 
+def _check_packages_installed(pkg_manager: str) -> dict:
+    """Check if common packages are installed (optimized)."""
+    common_packages = [
+        'htop', 'vim', 'nano', 'curl', 'wget', 'git', 'tmux', 'screen',
+        'tree', 'fzf', 'ripgrep', 'bat', 'exa', 'neofetch', 'btop',
+        'docker', 'docker-compose', 'code', 'firefox', 'chromium'
+    ]
+    
+    results = {}
+    
+    # Parallel package checking for speed
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        if pkg_manager == 'apt':
+            futures = {executor.submit(_run_cmd, f"dpkg -l {pkg} 2>/dev/null | grep -q '^ii' && echo 'yes'", 1): pkg for pkg in common_packages}
+        elif pkg_manager == 'pacman':
+            futures = {executor.submit(_run_cmd, f"pacman -Q {pkg} 2>/dev/null && echo 'yes'", 1): pkg for pkg in common_packages}
+        elif pkg_manager in ['dnf', 'yum']:
+            futures = {executor.submit(_run_cmd, f"rpm -q {pkg} 2>/dev/null && echo 'yes'", 1): pkg for pkg in common_packages}
+        else:
+            # Fallback: check if command exists in PATH
+            futures = {executor.submit(_run_cmd, f"which {pkg} 2>/dev/null && echo 'yes'", 1): pkg for pkg in common_packages}
+        
+        for future in as_completed(futures):
+            pkg_name = futures[future]
+            try:
+                output = future.result()
+                results[pkg_name] = bool(output and 'yes' in output.lower())
+            except:
+                results[pkg_name] = False
+    
+    return results
+
 def _detect_de_wm() -> str:
     """Detect desktop environment or window manager."""
     de = os.environ.get('XDG_CURRENT_DESKTOP', '').lower()
@@ -133,6 +165,9 @@ def generate_profile() -> dict:
     # Package count (faster than listing all)
     profile["package_count"] = _get_package_count(profile["package_manager"])
     
+    # Common installed packages (parallel check)
+    profile["installed_packages"] = _check_packages_installed(profile["package_manager"])
+    
     # Dev tools (parallel check)
     profile["dev_tools"] = _check_dev_tools()
     
@@ -177,6 +212,15 @@ def save_profile(profile: dict) -> None:
     for tool, installed in profile['dev_tools'].items():
         status = "✓" if installed else "✗"
         md += f"- {status} {tool}\n"
+    
+    md += f"\n## Installed Packages\n"
+    installed = [pkg for pkg, status in profile['installed_packages'].items() if status]
+    not_installed = [pkg for pkg, status in profile['installed_packages'].items() if not status]
+    
+    if installed:
+        md += f"**Installed:** {', '.join(installed)}\n\n"
+    if not_installed:
+        md += f"**Not Installed:** {', '.join(not_installed)}\n"
     
     md += f"\n## User Context\n"
     md += f"- **User:** {profile['user']}\n"
